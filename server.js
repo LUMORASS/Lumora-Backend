@@ -1,83 +1,60 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const bodyParser = require('body-parser');
-const axios = require('axios');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
-const cors = require('cors');
-require('dotenv').config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const dotenv = require("dotenv");
+
+dotenv.config(); // Load environment variables
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(bodyParser.json());
-app.use(cors());
+// Middleware
+app.use(cors()); // Enable CORS for all requests
+app.use(express.json()); // Parse JSON requests
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => console.log('MongoDB connected'))
-  .catch(err => console.log('MongoDB connection error:', err));
+// Connect to MongoDB (if using a database)
+const MONGO_URI = process.env.MONGO_URI;
+if (MONGO_URI) {
+    mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+        .then(() => console.log("MongoDB Connected"))
+        .catch(err => console.error("MongoDB Connection Error:", err));
+}
 
-// User Schema
-const UserSchema = new mongoose.Schema({
-    name: String,
-    email: String,
-    password: String,
-    role: String // parent, teacher, school
-});
-
-const User = mongoose.model('User', UserSchema);
-
-// Child Development Schema
-const ChildSchema = new mongoose.Schema({
-    name: String,
-    age: Number,
-    parentId: String,
-    schoolId: String,
-    progress: Array // Stores AI predictions over time
-});
-
-const Child = mongoose.model('Child', ChildSchema);
-
-// Authentication Middleware
-const authenticate = (req, res, next) => {
-    const token = req.header('Authorization');
-    if (!token) return res.status(401).json({ message: 'Access Denied' });
-
-    try {
-        const verified = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = verified;
-        next();
-    } catch (error) {
-        res.status(400).json({ message: 'Invalid Token' });
+// Authentication Middleware (if needed)
+const authMiddleware = (req, res, next) => {
+    const apiKey = req.headers["x-api-key"];
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+        return res.status(401).json({ error: "Unauthorized" });
     }
+    next();
 };
 
-// Register User
-app.post('/register', async (req, res) => {
-    const { name, email, password, role } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ name, email, password: hashedPassword, role });
-    await newUser.save();
-    res.json({ message: 'User registered successfully!' });
+// Root Route - Check if API is working
+app.get("/", (req, res) => {
+    res.json({ message: "Welcome to Lumora Backend API!" });
 });
 
-// Login User
-app.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'User not found' });
-
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return res.status(400).json({ message: 'Invalid credentials' });
-
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token });
+// Public API Route
+app.get("/api/public", (req, res) => {
+    res.json({ success: true, message: "This is a public API route!" });
 });
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Lumora server running on port ${PORT}`);
+// Protected API Route (Requires API Key)
+app.get("/api/protected", authMiddleware, (req, res) => {
+    res.json({ success: true, message: "You have accessed a protected route!" });
 });
+
+// Catch-all Route for 404 Errors
+app.use((req, res) => {
+    res.status(404).json({ error: "Route not found" });
+});
+
+// Start Server (for local development)
+if (process.env.NODE_ENV !== "production") {
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+}
+
+// Export for Vercel
+module.exports = app;
