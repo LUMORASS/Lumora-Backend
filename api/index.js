@@ -39,12 +39,5 @@ app.get("/api/private", (req, res) => {
   res.json({ message: "🔒 Private API is accessible!", key: process.env.SECRET_KEY });
 });
 
-// ✅ Start Server (For Local Development Only)
-if (process.env.NODE_ENV !== "production") {
-  app.listen(PORT, () => {
-    console.log(`✅ Server running locally at http://localhost:${PORT}`);
-  });
-}
-
 // ✅ Export app for Vercel Deployment
 module.exports = app;
